@@ -1,0 +1,3 @@
+[submodule "amq2-service-ml"]
+	path = amq2-service-ml
+	url = https://github.com/facundolucianna/amq2-service-ml.git
