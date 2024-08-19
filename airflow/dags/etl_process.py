@@ -4,7 +4,7 @@ import datetime
 markdown_text = """
 ### Proceso ETL para el dataset de lluvia en Australia.
 
-Se simula extracción de datos a partir de una URL, se realiza limpieza de datos y se guarda el resultado.
+Se simula extracción de datos a partir de una URL, se transforman los datos y se realiza el split del dataset para su posterior entrenamiento.
 
 """
 
@@ -18,9 +18,9 @@ default_args = {
 
 @dag(
     dag_id="process_etl_weatherAUS",
-    description="Proceso ETL para la carga de datos de lluvia en Australia.",
+    description="Proceso ETL para la carga de datos de diferentes estaciones de Australia.",
     doc_md=markdown_text,
-    tags=["ETL", "Weather Australia"],
+    tags=["ETL", "Rain in Australia", "Weather"],
     default_args=default_args,
     catchup=False,
     schedule_interval=None,
@@ -30,8 +30,8 @@ def process_etl_weatherAUS():
 
     @task.virtualenv(
         task_id="extract_data",
-        requirements=["pandas", "awswrangler==3.6.0"],
-        system_site_packages=False
+        requirements=["awswrangler==3.6.0"],
+        system_site_packages=True
     )
     def extract_data():
         import awswrangler as wr
@@ -40,7 +40,7 @@ def process_etl_weatherAUS():
         url = "https://raw.githubusercontent.com/diegosarina-ceia/AMq1/main/dataset/weatherAUS.csv"
         weather_df = pd.read_csv(url)
         
-        # Guardar el DataFrame como un archivo CSV para pasarlo entre tareas
+        # Se guarda el dataframe como un archivo CSV para pasarlo entre tareas
 
         data_path = "s3://data/raw/weatherAUS.csv"
         wr.s3.to_csv(df=weather_df, path=data_path, index=False)
@@ -49,8 +49,11 @@ def process_etl_weatherAUS():
 
     @task.virtualenv(
         task_id="transform_data",
-        requirements=["pandas", "numpy", "scikit-learn", "awswrangler==3.6.0"],
-        system_site_packages=False
+        requirements=[
+        "scikit-learn==1.2.2",
+        "awswrangler==3.6.0"
+        ],
+        system_site_packages=True
     )
     def transform_data(data_path):
         import awswrangler as wr
@@ -58,12 +61,13 @@ def process_etl_weatherAUS():
         import numpy as np
         from sklearn.preprocessing import StandardScaler
         from sklearn.impute import KNNImputer
-        import logging
-
-        logger = logging.getLogger("airflow.task")
+        import json
+        import datetime
+        import boto3
+        import botocore.exceptions
+        import mlflow
 
         weather_analisis_df = wr.s3.read_csv(data_path)
-        logger.info(f"Dataset leído desde: {data_path}")
 
         # Función para detectar y tratar outliers usando IQR
         def tratar_outliers(df):
@@ -79,8 +83,6 @@ def process_etl_weatherAUS():
 
                 #cantidad de valores fuera de los límites
                 outliers = len(df[(df[column] < lower_bound) | (df[column] > upper_bound)])
-
-                print(f"Columna: {column} - Límite inferior: {lower_bound} - Límite superior: {upper_bound} - Cantidad de outliers: {outliers}")
                 
                 # Reemplazar outliers con NaN (o podrías eliminarlos)
                 df[column] = df[column].apply(lambda x: lower_bound if x < lower_bound else (upper_bound if x > upper_bound else x))
@@ -88,15 +90,13 @@ def process_etl_weatherAUS():
             return df
 
         weather_analisis_df = tratar_outliers(weather_analisis_df)
-        logger.debug(f"Finalizó tratamiento de outliers")
-
 
         #carga de los datos
         weather_sin_outliers_df = weather_analisis_df.copy()
 
         VARIABLE_SALIDA = 'RainTomorrow'
 
-        #aliminar los registros para los cuales la columna RainTomorrow tiene valores faltantes
+        # Eliminar los registros para los cuales la columna RainTomorrow tiene valores faltantes
         weather_sin_outliers_df = weather_sin_outliers_df.dropna(subset=[VARIABLE_SALIDA])
 
         # modificar el valor 9 en las columnas Cloud9am y Cloud3pm por NaN
@@ -134,8 +134,6 @@ def process_etl_weatherAUS():
                 return row['WindGustDir']
 
         weather_sin_errores_df['WindGustDir'] = weather_sin_errores_df.apply(fill_missing_windgustdir_specific_locations, axis=1)
-
-        logger.debug(f"Finalizó tratamiento de datos faltantes")
 
         weather_impmed_df = weather_sin_errores_df.copy(deep=True)
 
@@ -274,23 +272,19 @@ def process_etl_weatherAUS():
         weather_imp_cod_df = weather_impmed_df.copy(deep=True)
         weather_imp_cod_df[IMP_CORRECTA]=weather_impmed_df2[IMP_CORRECTA]
 
-        logger.debug(f"Finalizó imputación 1")
-
         weather_input_avanzada_df = weather_sin_errores_df.copy(deep=True)
         weather_input_avanzada_df[IMP_CORRECTA] = weather_impmed_df2[IMP_CORRECTA]
 
         #lista de variables numericas
         numerical_cols = weather_input_avanzada_df.select_dtypes(include=['float64']).columns.tolist()
 
-        logger.debug(f"Comienza imputación con KNN...")
-        # Imputación con KNNImputer
+        # Imputación con KNNImputer (se comenta a modo de prueba para evitar demoras)
         #scaler = StandardScaler()
         #scaled_features = scaler.fit_transform(weather_input_avanzada_df[numerical_cols])
         
         #knn_imputer = KNNImputer(n_neighbors=5)
         #imputed_knn = knn_imputer.fit_transform(scaled_features)
         #weather_input_avanzada_df[numerical_cols] = scaler.inverse_transform(imputed_knn)
-        #logger.debug(f"Finaliza imputación con KNN")
 
         weather_imp_cod_final_df = weather_impmed_df.copy(deep=True)
         weather_imp_cod_final_df[IMP_CORRECTA] = weather_impmed_df2[IMP_CORRECTA]
@@ -298,14 +292,72 @@ def process_etl_weatherAUS():
 
         data_end_path = "s3://data/raw/weatherAUS_corregido.csv"
         wr.s3.to_csv(df=weather_imp_cod_final_df, path=data_end_path, index=False)
-        logger.debug(f"Finaliza transformación de datos, se almacena en {data_end_path}")
+
+        # Se almacena información sobre el dataset
+        client = boto3.client('s3')
+
+        data_dict = {}
+        try:
+            client.head_object(Bucket='data', Key='data_info/data.json')
+            result = client.get_object(Bucket='data', Key='data_info/data.json')
+            text = result["Body"].read().decode()
+            data_dict = json.loads(text)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] != "404":
+                # Something else has gone wrong.
+                raise e
+            
+        target_col = 'RainTomorrow'
+
+        # Upload JSON String to an S3 Object
+        data_dict['columns'] = weather_analisis_df.columns.to_list()
+        data_dict['columns_after_transform'] = weather_imp_cod_final_df.columns.to_list()
+        data_dict['target_col'] = target_col
+        data_dict['categorical_columns'] = categorical_cols
+        data_dict['columns_dtypes'] = {k: str(v) for k, v in weather_analisis_df.dtypes.to_dict().items()}
+        data_dict['columns_dtypes_after_transform'] = {k: str(v) for k, v in weather_imp_cod_final_df.dtypes
+                                                                                                    .to_dict()
+                                                                                                    .items()}
+
+        category_dummies_dict = {}
+        for category in categorical_cols:
+            category_dummies_dict[category] = weather_analisis_df[category].unique().tolist()
+
+        data_dict['categories_values_per_categorical'] = category_dummies_dict
+
+        data_dict['date'] = datetime.datetime.today().strftime('%Y/%m/%d-%H:%M:%S"')
+        data_string = json.dumps(data_dict, indent=2)
+
+        client.put_object(
+                Bucket='data',
+                Key='data_info/data.json',
+                Body=data_string
+            )
+
+
+        # Se registra el experimento en MLflow
+        mlflow.set_tracking_uri('http://mlflow:5000')
+        experiment = mlflow.set_experiment("Rain in Australia")
+        mlflow.start_run(run_name='ETL_run_' + datetime.datetime.today().strftime('%Y/%m/%d-%H:%M:%S"'),
+                        experiment_id=experiment.experiment_id,
+                        tags={"experiment": "etl", "dataset": "Rain in Australia"})
+        mlflow_dataset = mlflow.data.from_pandas(weather_analisis_df.sample(10),
+                                                source="https://www.kaggle.com/datasets/jsphyg/weather-dataset-rattle-package",
+                                                targets=target_col,
+                                                name="weather_data_complete")
+        mlflow_dataset_dummies = mlflow.data.from_pandas(weather_imp_cod_final_df.sample(10),
+                                                        source="https://www.kaggle.com/datasets/jsphyg/weather-dataset-rattle-package",
+                                                        targets=target_col,
+                                                        name="weather_data_transformed")
+        mlflow.log_input(mlflow_dataset, context="Dataset")                        
+        mlflow.log_input(mlflow_dataset_dummies, context="Dataset")
         
         return data_end_path
 
     @task.virtualenv(
         task_id="split_dataset",
-        requirements=["awswrangler==3.6.0", "pandas", "scikit-learn"],
-        system_site_packages=False
+        requirements=["awswrangler==3.6.0", "scikit-learn"],
+        system_site_packages=True
     )
     def split_dataset(data_transformed_path):
         import awswrangler as wr
