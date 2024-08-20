@@ -17,7 +17,7 @@ default_args = {
 }
 
 @dag(
-    dag_id="process_etl_weatherAUS",
+    dag_id="etl_process_rain_australia",
     description="Proceso ETL para la carga de datos de diferentes estaciones de Australia.",
     doc_md=markdown_text,
     tags=["ETL", "Rain in Australia", "Weather"],
