@@ -32,6 +32,7 @@ def load_model(model_name: str, alias: str):
     return model_ml, version_model_ml
 
 # Clase de entrada basada en los 29 features del dataset con validaciones y descripciones
+# Los features con alta correlacion se configuraron como opcionales
 class ModelInput(BaseModel):
     MinTemp: float = Field(
         description="Minimum temperature of the day", ge=-50, le=60
@@ -63,7 +64,8 @@ class ModelInput(BaseModel):
     Humidity3pm: float = Field(
         description="Humidity at 3pm in percentage", ge=0, le=100
     )
-    Pressure9am: float = Field(
+    Pressure9am: Optional[float] = Field(
+        default=None,
         description="Pressure at 9am in hPa", ge=0, le=1100
     )
     Pressure3pm: float = Field(
@@ -75,10 +77,12 @@ class ModelInput(BaseModel):
     Cloud3pm: float = Field(
         description="Cloud cover at 3pm on a scale of 0-9", ge=0, le=9
     )
-    Temp9am: float = Field(
+    Temp9am: Optional[float] = Field(
+        default=None,
         description="Temperature at 9am in Celsius", ge=-50, le=60
     )
-    Temp3pm: float = Field(
+    Temp3pm: Optional[float] = Field(
+        default=None,
         description="Temperature at 3pm in Celsius", ge=-50, le=60
     )
     RainToday: int = Field(
