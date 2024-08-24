@@ -366,6 +366,28 @@ services:
       timeout: 10s
       retries: 3
 
+  ###### STREAMLIT
+  streamlit:
+    restart: always
+    build: './dockerfiles/streamlit'
+    container_name: streamlit
+    profiles:
+      - streamlit
+      - all
+    ports:
+      - ${STREAMLIT_PORT}:${STREAMLIT_PORT}
+    volumes:
+      - ./dockerfiles/streamlit:/app
+    networks:
+      - frontend
+      - backend
+    environment:
+      PYTHONUNBUFFERED: 1
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3}
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+
 networks:
   frontend:
     driver: bridge
