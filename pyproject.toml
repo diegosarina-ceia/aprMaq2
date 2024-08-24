@@ -8,6 +8,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 pandas = "^2.2.2"
+awswrangler = "^3.9.1"
+mlflow = "^2.15.1"
+optuna = "^3.6.1"
+scikit-learn = "^1.5.1"
+streamlit = "^1.37.1"
 
 
 [build-system]

@@ -228,6 +228,7 @@ def process_etl_weatherAUS():
 
         data_dict = {}
         try:
+            client.head_object(Bucket='data', Key='data_info/data.json')
             result = client.get_object(Bucket='data', Key='data_info/data.json')
             data_dict = json.loads(result["Body"].read().decode())
         except botocore.exceptions.ClientError as e:

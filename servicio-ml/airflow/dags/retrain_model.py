@@ -68,7 +68,7 @@ def processing_dag():
             import random
 
             # Supongamos que X_train y y_train son DataFrames de pandas
-            n_samples = 10000
+            n_samples = 20000
 
             # Generar una lista de índices aleatorios
             indices = random.sample(range(len(X_train)), n_samples)
