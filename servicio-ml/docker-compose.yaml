@@ -306,13 +306,14 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
-      - DS_PROMETHEUS=${GF_DS_PROMETHEUS:-Prometheus}
+      - DS_PROMETHEUS=${GF_DS_PROMETHEUS:-Prometheus} # configuracion de la fuente de datos creada en grafana
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://grafana:3000 || exit 1
       interval: 60s
       timeout: 10s
       retries: 3
 
+  # conector airflow-prometheus
   statsd-exporter:
     restart: always
     build: './dockerfiles/statsd-exporter'
@@ -321,14 +322,15 @@ services:
     entrypoint: ["/bin/sh", "-c", "--"]
     command: ["statsd_exporter --statsd.listen-udp=:9125 --web.listen-address=:9102 --log.level warn --statsd.mapping-config=/home/statsd-mapping-configs.yaml"]
     ports:
-      - ${AIRFLOW_EXPORT_PORT:-9125}:9125 #salida
-      - ${PROMETHEUS_AIRFLOW_IMPORT_PORT:-9102}:9102 #entrada
+      - ${AIRFLOW_EXPORT_PORT:-9125}:9125 #puerto donde airflow expone los datos
+      - ${PROMETHEUS_AIRFLOW_IMPORT_PORT:-9102}:9102 #puerto donde prometheus obtiene los datos
     networks:
       - backend
     profiles:
       - monitoring
       - all
   
+  # conector postgres-prometheus
   postgres_exporter:
     restart: always
     image: prometheuscommunity/postgres-exporter:latest
@@ -336,7 +338,7 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://${PG_USER:-airflow}:${PG_PASSWORD:-airflow}@postgres:${PG_PORT:-5432}/${PG_DATABASE:-airflow}?sslmode=disable"
     ports:
-      - "${PROMETHEUS_PG_IMPORT_PORT:-9187}:9187"
+      - "${PROMETHEUS_PG_IMPORT_PORT:-9187}:9187" #puerto donde prometheus obtiene los datos
     networks:
       - backend
     depends_on:
