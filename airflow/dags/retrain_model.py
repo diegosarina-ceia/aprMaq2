@@ -64,6 +64,19 @@ def processing_dag():
             X_test = wr.s3.read_csv("s3://data/final/test/weather_X_test.csv")
             y_test = wr.s3.read_csv("s3://data/final/test/weather_y_test.csv")
 
+            import pandas as pd
+            import random
+
+            # Supongamos que X_train y y_train son DataFrames de pandas
+            n_samples = 10000
+
+            # Generar una lista de índices aleatorios
+            indices = random.sample(range(len(X_train)), n_samples)
+
+            # Crear las muestras usando los índices aleatorios
+            X_train = X_train.iloc[indices].reset_index(drop=True)
+            y_train = y_train.iloc[indices].reset_index(drop=True)
+
             return X_train, y_train, X_test, y_test
 
         def mlflow_track_experiment(model, X):
