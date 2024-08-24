@@ -5,7 +5,7 @@ import pandas as pd
 import boto3
 import mlflow
 
-from typing import Literal
+from typing import Literal, Optional
 from fastapi import FastAPI, Body, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -178,7 +178,7 @@ class ModelOutput(BaseModel):
 
 
 # Cargar el modelo antes de iniciar
-model, version_model = load_model("weather_model_prod", "champion")
+model, version_model = load_model("rain_australia_model_prod", "champion")
 
 app = FastAPI()
 
@@ -206,7 +206,7 @@ def predict(
     str_pred = "No rain tomorrow" if prediction[0] == 0 else "Rain expected tomorrow"
 
     # Verificar cambios de modelo en segundo plano
-    background_tasks.add_task(load_model, "weather_model_prod", "champion")
+    background_tasks.add_task(load_model, "rain_australia_model_prod", "champion")
 
     # Retornar la predicción
     return ModelOutput(int_output=bool(prediction[0]), str_output=str_pred)
