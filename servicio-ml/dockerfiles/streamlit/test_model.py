@@ -55,10 +55,10 @@ def show():
         rain_today = st.slider('RainToday', min_value=0, max_value=1, value=0, format="%d")
         
         # Variables opcionales
-        pressure9am = st.slider('Pressure9am', min_value=950.0, max_value=1050.0, value=None, format="%.1f", help="Opcional")
-        pressure3pm = st.slider('Pressure3pm', min_value=950.0, max_value=1050.0, value=None, format="%.1f", help="Opcional")
-        temp9am = st.slider('Temp9am', min_value=-10.0, max_value=50.0, value=None, format="%.1f", help="Opcional")
-        temp3pm = st.slider('Temp3pm', min_value=-10.0, max_value=50.0, value=None, format="%.1f", help="Opcional")
+        pressure9am = st.slider('Pressure9am', min_value=950.0, max_value=1050.0, value=None, format="%.1f")
+        pressure3pm = st.slider('Pressure3pm', min_value=950.0, max_value=1050.0, value=None, format="%.1f")
+        temp9am = st.slider('Temp9am', min_value=-10.0, max_value=50.0, value=None, format="%.1f")
+        temp3pm = st.slider('Temp3pm', min_value=-10.0, max_value=50.0, value=None, format="%.1f")
 
         # Selección de dirección del viento
         wind_gust_dir = st.selectbox('Dirección del Viento (WindGustDir)', options=list(direccion_to_angulo.keys()), key="wind_gust_dir")
@@ -89,11 +89,15 @@ def show():
                         "WindSpeed3pm": wind_speed3pm,
                         "Humidity9am": humidity9am,
                         "Humidity3pm": humidity3pm,
+                        "Pressure9am":pressure9am,
+                        "Pressure3pm":pressure3pm,
                         "Cloud9am": cloud9am,
                         "Cloud3pm": cloud3pm,
+                        "Temp9am":temp9am,
+                        "Temp3pm":temp3pm,
                         "RainToday": rain_today,
-                        "Month": selected_date.month,
                         "Year": selected_date.year,
+                        "Month": selected_date.month,
                         "Day": selected_date.day,
                         "Latitude": latitude,
                         "Longitude": longitude,
@@ -106,29 +110,22 @@ def show():
                     }
                 }
 
-                # Agregar las variables opcionales si están definidas
-                if pressure9am is not None:
-                    payload["features"]["Pressure9am"] = pressure9am
-                if pressure3pm is not None:
-                    payload["features"]["Pressure3pm"] = pressure3pm
-                if temp9am is not None:
-                    payload["features"]["Temp9am"] = temp9am
-                if temp3pm is not None:
-                    payload["features"]["Temp3pm"] = temp3pm
-
                 # Enviar la solicitud POST usando el paquete `requests`
                 try:
                     print(f"PAYLOAD: {payload}")
-                    response = requests.post("http://fastapi:8800/predict/", json=payload) #TODO CHANGE HERE!!!
-                    response.raise_for_status()  # Levantar un error si la respuesta no es exitosa
-                    prediction = response.json()  # Decodificar la respuesta JSON
+                    response = requests.post("http://fastapi:8800/predict/", json=payload)
+                    response.raise_for_status()
+                    prediction = response.json()
                 except requests.exceptions.RequestException as e:
                     st.error(f"Error al realizar la solicitud: {e}")
                     return
-
                 # Mostrar los resultados
                 st.subheader(f"Predicción para el {selected_date} en la ubicación {selected_location}:")
-                st.write(f"¿Lloverá mañana? {prediction.get('result', 'Desconocido')}")
+                # Determinar el mensaje basado en la predicción
+                if prediction.get('int_output', False):
+                    st.write("¿Lloverá mañana? 🌧️ Sí, lloverá mañana ☔")
+                else:
+                    st.write("¿Lloverá mañana? 🌞 No lloverá mañana 😊")
 
                 # Visualización de los resultados en el mapa
                 view_state = pdk.ViewState(

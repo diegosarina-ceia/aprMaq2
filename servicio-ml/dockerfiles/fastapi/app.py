@@ -5,6 +5,11 @@ import pandas as pd
 import boto3
 import mlflow
 
+import logging
+
+# Configuración básica del logging
+logging.basicConfig(level=logging.INFO)
+
 from typing import Literal, Optional
 from fastapi import FastAPI, Body, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -16,20 +21,25 @@ from typing_extensions import Annotated
 # Función para cargar el modelo (puedes ajustarla según tu flujo de trabajo actual)
 def load_model(model_name: str, alias: str):
     try:
-        # Cargar el modelo desde MLflow o localmente
         mlflow.set_tracking_uri('http://mlflow:5000')
         client_mlflow = mlflow.MlflowClient()
-
+        logging.info("MLflow client initialized.")
+        
         model_data_mlflow = client_mlflow.get_model_version_by_alias(model_name, alias)
+        logging.info(f"Model data fetched: {model_data_mlflow}")
+        
         model_ml = mlflow.sklearn.load_model(model_data_mlflow.source)
+        logging.info("Model loaded from MLflow.")
+        
         version_model_ml = int(model_data_mlflow.version)
-    except:
-        # Cargar el modelo localmente si MLflow falla
+    except Exception as e:
+        logging.error(f"Error loading model from MLflow: {e}")
         with open('/app/files/model.pkl', 'rb') as file_ml:
             model_ml = pickle.load(file_ml)
         version_model_ml = 0
 
     return model_ml, version_model_ml
+
 
 # Clase de entrada basada en los 29 features del dataset con validaciones y descripciones
 # Los features con alta correlacion se configuraron como opcionales
@@ -88,11 +98,11 @@ class ModelInput(BaseModel):
     RainToday: int = Field(
         description="Whether it rained today: 1 for Yes, 0 for No", ge=0, le=1
     )
-    Month: int = Field(
-        description="Month of the observation", ge=1, le=12
-    )
     Year: int = Field(
         description="Year of the observation", ge=1900, le=2100
+    )
+    Month: int = Field(
+        description="Month of the observation", ge=1, le=12
     )
     Day: int = Field(
         description="Day of the observation", ge=1, le=31
@@ -143,8 +153,8 @@ class ModelInput(BaseModel):
                     "Temp9am": 17.2,
                     "Temp3pm": 22.4,
                     "RainToday": 0,
-                    "Month": 8,
                     "Year": 2023,
+                    "Month": 8,
                     "Day": 24,
                     "Latitude": -33.86,
                     "Longitude": 151.21,
@@ -194,10 +204,12 @@ def predict(
     background_tasks: BackgroundTasks
 ):
     features_dict = features.dict()
+    print(f"features: {features_dict}")
     features_list = [features_dict[key] for key in features_dict.keys()]
 
     # Convertir a DataFrame
     features_df = pd.DataFrame([features_list], columns=features_dict.keys())
+    print(f"DataFrame columns: {features_df.columns}")
 
     # Realizar la predicción
     prediction = model.predict(features_df)
