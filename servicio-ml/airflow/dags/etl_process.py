@@ -22,7 +22,7 @@ default_args = {
     tags=["ETL", "Rain in Australia", "Weather"],
     default_args=default_args,
     catchup=False,
-    schedule_interval=None,
+    schedule_interval='0 0 1 * *',  # Corre el primer día de cada mes a las 0:00 hs
     start_date=datetime.datetime(2023, 8, 10),
 )
 def process_etl_weatherAUS():
@@ -39,7 +39,7 @@ def process_etl_weatherAUS():
         url = "https://raw.githubusercontent.com/diegosarina-ceia/AMq1/main/dataset/weatherAUS.csv"
         weather_df = pd.read_csv(url)
         
-        # Save the dataframe as a CSV file to pass between tasks
+        # Se guardar el dataframe como CSV en S3 para poder pasarlo entre tareas
         data_path = "s3://data/raw/weatherAUS.csv"
         wr.s3.to_csv(df=weather_df, path=data_path, index=False)
 
@@ -85,7 +85,7 @@ def process_etl_weatherAUS():
         VARIABLE_SALIDA = 'RainTomorrow'
         weather_df = weather_df.dropna(subset=[VARIABLE_SALIDA])
 
-        # Replace value 9 in Cloud9am and Cloud3pm columns with NaN
+        # Se reeamplaza 9 en Cloud9am and Cloud3pm con NaN (es un valor no válido o poco común)
         weather_df['Cloud9am'] = weather_df['Cloud9am'].replace(9, np.nan)
         weather_df['Cloud3pm'] = weather_df['Cloud3pm'].replace(9, np.nan)
 
@@ -101,7 +101,7 @@ def process_etl_weatherAUS():
 
         categorical_cols = weather_df.select_dtypes(include=['object']).columns.tolist()
 
-        # Handle missing values in categorical columns
+        # Se imputan valores en columnas categóricas
         region_montly_mode = weather_df.groupby(['Month', 'Location'])[categorical_cols].agg(
             lambda x: x.mode().iloc[0] if not x.mode().empty else None
         )
@@ -127,7 +127,7 @@ def process_etl_weatherAUS():
 
         weather_df['WindGustDir'] = weather_df.apply(fill_missing_windgustdir, axis=1)
 
-        # Create latitude and longitude columns based on location
+        # Se obtiene latitud y longitud basado en Location
         coordenadas = {
             "Albury": (-36.0737, 146.9135),
             "BadgerysCreek": (-33.9209, 150.7738),
@@ -185,7 +185,7 @@ def process_etl_weatherAUS():
 
         weather_df.drop(columns='Location', inplace=True)
 
-        # Encode wind direction as sine and cosine components
+        # Se codifica la dirección del viento en componentes seno y coseno
         def encode_wind_dir(df, col, mapping):
             angles = df[col].map(mapping)
             angles_rad = np.deg2rad(angles)
@@ -223,12 +223,11 @@ def process_etl_weatherAUS():
         data_end_path = "s3://data/raw/weatherAUS_corregido.csv"
         wr.s3.to_csv(df=weather_df, path=data_end_path, index=False)
 
-        # Save metadata to S3
+        # Se guarda la metadata en S3
         client = boto3.client('s3')
 
         data_dict = {}
         try:
-            client.head_object(Bucket='data', Key='data_info/data.json')
             result = client.get_object(Bucket='data', Key='data_info/data.json')
             data_dict = json.loads(result["Body"].read().decode())
         except botocore.exceptions.ClientError as e:
@@ -237,7 +236,6 @@ def process_etl_weatherAUS():
             else:
                 raise e
 
-        # Upload JSON String to an S3 Object
         data_dict['columns'] = weather_original_df.columns.to_list()
         data_dict['columns_after_transform'] = weather_df.columns.to_list()
         data_dict['target_col'] = VARIABLE_SALIDA
@@ -332,7 +330,7 @@ def process_etl_weatherAUS():
         save_to_csv(X_train, "s3://data/final/train/weather_X_train.csv")
         save_to_csv(X_test, "s3://data/final/test/weather_X_test.csv")
 
-        # Save information of the dataset
+        # Se guarda información del dataset
         client = boto3.client('s3')
 
         try:
@@ -344,7 +342,6 @@ def process_etl_weatherAUS():
                 # Something else has gone wrong.
                 raise e
 
-        # Upload JSON String to an S3 Object
         data_dict['standard_scaler_mean'] = sc_X.mean_.tolist()
         data_dict['standard_scaler_std'] = sc_X.scale_.tolist()
         data_string = json.dumps(data_dict, indent=2)
@@ -358,7 +355,7 @@ def process_etl_weatherAUS():
         mlflow.set_tracking_uri('http://mlflow:5000')
         experiment = mlflow.set_experiment("Rain in Australia")
 
-        # Obtain the last experiment run_id to log the new information
+        # Se obtiene el último run_id del experimento para loguear la información
         list_run = mlflow.search_runs([experiment.experiment_id], output_format="list")
 
         with mlflow.start_run(run_id=list_run[0].info.run_id):

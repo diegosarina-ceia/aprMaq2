@@ -12,7 +12,6 @@ Entrena el modelo, compara contra el actual y si es mejor lo reemplaza en produc
 default_args = {
     'owner': "Airflow",
     'depends_on_past': False,
-    'schedule_interval': None,
     'retries': 1,
     'retry_delay': datetime.timedelta(minutes=5),
     'dagrun_timeout': datetime.timedelta(minutes=15)
@@ -24,6 +23,8 @@ default_args = {
     doc_md=markdown_text,
     tags=["Train", "Rain in Australia", "Weather"],
     default_args=default_args,
+    schedule_interval='0 1 1 * *',  # Corre el primer día de cada mes a las 1:00 am
+    start_date=datetime.datetime(2023, 8, 10),
     catchup=False,
 )
 def processing_dag():
@@ -67,13 +68,14 @@ def processing_dag():
             import pandas as pd
             import random
 
-            # Supongamos que X_train y y_train son DataFrames de pandas
-            n_samples = 20000
+            # A modo de pruebas se cargan sólo 10000 ejemplo para entrenar
+            # (para máquinas locales con bajos recursos computacionales)
+            n_samples = 10000
 
-            # Generar una lista de índices aleatorios
+            # Se genera una lista de índices aleatorios
             indices = random.sample(range(len(X_train)), n_samples)
 
-            # Crear las muestras usando los índices aleatorios
+            # Se generan muestras usando los índices aleatorios
             X_train = X_train.iloc[indices].reset_index(drop=True)
             y_train = y_train.iloc[indices].reset_index(drop=True)
 
@@ -81,7 +83,7 @@ def processing_dag():
 
         def mlflow_track_experiment(model, X):
 
-            # Track the experiment
+            # Se realiza el track del experimento en MLflow
             experiment = mlflow.set_experiment("Rain in Australia")
 
             mlflow.start_run(run_name='Challenger_run_' + datetime.datetime.today().strftime('%Y/%m/%d-%H:%M:%S"'),
@@ -94,7 +96,6 @@ def processing_dag():
 
             mlflow.log_params(params)
 
-            # Save the artifact of the challenger model
             artifact_path = "model"
 
             signature = infer_signature(X, model.predict(X))
@@ -108,7 +109,7 @@ def processing_dag():
                 metadata={"model_data_version": 1}
             )
 
-            # Obtain the model URI
+            # Se obtiene la URI del modelo
             return mlflow.get_artifact_uri(artifact_path)
 
         def register_challenger(model, f1_score, model_uri):
@@ -116,12 +117,12 @@ def processing_dag():
             client = mlflow.MlflowClient()
             name = "rain_australia_model_prod"
 
-            # Save the model params as tags
+            # Se guardan los parámetros del modelo como tags y también la métrica f1-score
             tags = model.get_params()
             tags["model"] = type(model).__name__
             tags["f1-score"] = f1_score
 
-            # Save the version of the model
+            # Se guarda la versión del modelo
             result = client.create_model_version(
                 name=name,
                 source=model_uri,
@@ -129,29 +130,24 @@ def processing_dag():
                 tags=tags
             )
 
-            # Save the alias as challenger
+            # El alias se setea como "challenger"
             client.set_registered_model_alias(name, "challenger", result.version)
 
-        # Load the champion model
         champion_model = load_the_champion_model()
 
-        # Clone the model
         challenger_model = clone(champion_model)
 
-        # Load the dataset
         X_train, y_train, X_test, y_test = load_the_train_test_data()
 
-        # Fit the training model
         challenger_model.fit(X_train, y_train.to_numpy().ravel())
 
-        # Obtain the metric of the model
+        # Se obtiene métrica del modelo entrenado
         y_pred = challenger_model.predict(X_test)
         f1_score = f1_score(y_test.to_numpy().ravel(), y_pred)
 
-        # Track the experiment
         artifact_uri = mlflow_track_experiment(challenger_model, X_train)
 
-        # Record the model
+        # Se registra el modelo "challenger"
         register_challenger(challenger_model, f1_score, artifact_uri)
 
 
@@ -190,35 +186,32 @@ def processing_dag():
 
             client = mlflow.MlflowClient()
 
-            # Demote the champion
+            # Se baja el actual modelo "champion"
             client.delete_registered_model_alias(name, "champion")
 
-            # Load the challenger from registry
+            # Se carga el modelo "challenger"
             challenger_version = client.get_model_version_by_alias(name, "challenger")
 
-            # delete the alias of challenger
+            # Se le quita el alias "challenger"
             client.delete_registered_model_alias(name, "challenger")
 
-            # Transform in champion
+            # Se le setea el alias "champion"
             client.set_registered_model_alias(name, "champion", challenger_version.version)
 
         def demote_challenger(name):
 
             client = mlflow.MlflowClient()
-
-            # delete the alias of challenger
             client.delete_registered_model_alias(name, "challenger")
 
-        # Load the champion model
         champion_model = load_the_model("champion")
 
-        # Load the challenger model
         challenger_model = load_the_model("challenger")
 
-        # Load the dataset
+        # Se carga el dataset
         X_test, y_test = load_the_test_data()
 
-        # Obtain the metric of the models
+        # Se obtienen las métricas para "challenger" y "champion"
+
         y_pred_champion = champion_model.predict(X_test)
         f1_score_champion = f1_score(y_test.to_numpy().ravel(), y_pred_champion)
 
@@ -227,7 +220,7 @@ def processing_dag():
 
         experiment = mlflow.set_experiment("Rain in Australia")
 
-        # Obtain the last experiment run_id to log the new information
+        # Se obtiene el último run_id del experimento para loguear la nueva información
         list_run = mlflow.search_runs([experiment.experiment_id], output_format="list")
 
         with mlflow.start_run(run_id=list_run[0].info.run_id):
