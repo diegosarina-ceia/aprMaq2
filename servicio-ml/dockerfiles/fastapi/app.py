@@ -1,14 +1,14 @@
 import json
 import pickle
+import time
+from urllib.request import Request
 import numpy as np
 import pandas as pd
 import boto3
 import mlflow
-
 import logging
+import threading
 
-# Configuración básica del logging
-logging.basicConfig(level=logging.INFO)
 
 from typing import Literal, Optional
 from fastapi import FastAPI, Body, BackgroundTasks
@@ -17,8 +17,10 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
+# Configuración básica del logging
+logging.basicConfig(level=logging.INFO)
 
-# Función para cargar el modelo (puedes ajustarla según tu flujo de trabajo actual)
+# Función para cargar el modelo
 def load_model(model_name: str, alias: str):
     try:
         mlflow.set_tracking_uri('http://mlflow:5000')
@@ -49,13 +51,13 @@ def load_model(model_name: str, alias: str):
 
         data_dictionary["standard_scaler_mean"] = np.array(data_dictionary["standard_scaler_mean"])
         data_dictionary["standard_scaler_std"] = np.array(data_dictionary["standard_scaler_std"])
-    except:
-        # If data dictionary is not found in S3, load it from local file
-        file_s3 = open('/app/files/data.json', 'r')
-        data_dictionary = json.load(file_s3)
-        file_s3.close()
+    except Exception as e:
+        logging.error(f"Error loading data dictionary from S3: {e}")
+        with open('/app/files/data.json', 'r') as file_s3:
+            data_dictionary = json.load(file_s3)
 
     return model_ml, version_model_ml, data_dictionary
+
 
 
 def transform_single_example(raw_example, wind_dir_mapping):
@@ -238,9 +240,6 @@ class ModelOutput(BaseModel):
     }
 
 
-# Cargar el modelo antes de iniciar
-model, version_model, data_dict = load_model("rain_australia_model_prod", "champion")
-
 direccion_to_angulo = {
     'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5, 'E': 90, 'ESE': 112.5,
     'SE': 135, 'SSE': 157.5, 'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
@@ -254,6 +253,9 @@ def load_json_from_s3(bucket_name, key):
     return json_data
 
 app = FastAPI()
+
+# Cargar el modelo antes de iniciar
+model, version_model, data_dict = load_model("rain_australia_model_prod", "champion")
 
 
 @app.get("/")
@@ -282,10 +284,13 @@ def predict(
     # Se escalan los datos utilizando standard scaler
     features_df = (features_df-data_dict["standard_scaler_mean"])/data_dict["standard_scaler_std"]
 
-    # Realizar la predicción
-    prediction = model.predict(features_df)
-
-    print(f'prediction: {prediction}')
+    try:
+        # Realizar la predicción
+        prediction = model.predict(features_df)
+        logging.info(f'Prediction result: {prediction}')
+    except Exception as e:
+        logging.error(f"Error in model prediction: {e}")
+        return JSONResponse(content=jsonable_encoder({"error": "Model prediction failed."}), status_code=500)
 
     # Convertir el resultado a cadena legible
     str_pred = "No rain tomorrow" if prediction[0] == 0 else "Rain expected tomorrow"
@@ -295,3 +300,43 @@ def predict(
 
     # Retornar la predicción
     return ModelOutput(int_output=bool(prediction[0]), str_output=str_pred)
+
+class StatusResponse(BaseModel):
+    status: str
+
+@app.post("/update-model", response_model=StatusResponse)
+async def update_model():
+    # Verifica si existe un nuevo modelo para actualizar
+    status = check_for_new_model("rain_australia_model_prod", "champion")
+    
+    if status == 200:
+        return StatusResponse(status="Modelo actualizado")
+    elif status == 201:
+        return StatusResponse(status="Sin cambios")
+    else:
+        return StatusResponse(status="Se utiliza modelo local")
+
+def check_for_new_model(model_name: str, alias: str):
+    global model, version_model, data_dict
+    status_code = 400
+    try:
+        mlflow.set_tracking_uri('http://mlflow:5000')
+        client_mlflow = mlflow.MlflowClient()
+        model_data_mlflow = client_mlflow.get_model_version_by_alias(model_name, alias)
+
+        new_version = int(model_data_mlflow.version)
+        if new_version > version_model:
+            logging.info(f"Nueva versión del modelo encontrada: {new_version}")
+            model, version_model, data_dict = load_model(model_name, alias)
+            logging.info(f"Modelo actualizado a la versión {version_model}")
+            status_code = 200
+        else:
+            logging.info("No se encontró una nueva versión del modelo.")
+            status_code = 201
+
+    except Exception as e:
+        logging.error(f"No hay modelos disponibles en MLFlow, se utiliza modelo local: {e}")
+    
+    return status_code
+
+        
