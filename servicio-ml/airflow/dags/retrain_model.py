@@ -26,6 +26,7 @@ default_args = {
     schedule_interval='0 1 1 * *',  # Corre el primer día de cada mes a las 1:00 am
     start_date=datetime.datetime(2023, 8, 10),
     catchup=False,
+    is_paused_upon_creation=True
 )
 def processing_dag():
 
@@ -238,7 +239,20 @@ def processing_dag():
         else:
             demote_challenger(name)
 
-    train_the_challenger_model() >> evaluate_champion_challenge()
+    @task.virtualenv(
+        task_id="notify_api_about_new_model",
+        requirements=["requests"],
+        system_site_packages=True
+    )
+    def notify_api_about_new_model():
+        import requests
+
+        url = "http://fastapi:8800/update-model"
+        response = requests.post(url)
+        print(response.text)
+
+
+    train_the_challenger_model() >> evaluate_champion_challenge() >> notify_api_about_new_model()
 
 
 my_dag = processing_dag()

@@ -13,6 +13,7 @@ default_args = {
     'retries': 1,
     'retry_delay': datetime.timedelta(minutes=5),
     'dagrun_timeout': datetime.timedelta(minutes=60),
+    'is_active': True
 }
 
 @dag(
@@ -23,7 +24,8 @@ default_args = {
     default_args=default_args,
     catchup=False,
     schedule_interval='0 0 1 * *',  # Corre el primer día de cada mes a las 0:00 hs
-    start_date=datetime.datetime(2023, 8, 10),
+    start_date=datetime.datetime(2024, 7, 1),
+    is_paused_upon_creation=False
 )
 def process_etl_weatherAUS():
 
