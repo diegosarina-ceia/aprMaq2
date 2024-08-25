@@ -7,6 +7,70 @@ Integrantes:
 - Marco Joel Isidro
 - Diego Sarina
 
+## Introducción
+
+En este trabajo práctico integrador de la materia *Aprendizaje de Máquinas II*, hemos llevado a cabo el ciclo completo de MLOps, que incluye desde la preparación y limpieza de datos hasta el despliegue de un modelo de Machine Learning en producción. Este proyecto es una continuación del trabajo realizado en *Aprendizaje de Máquinas I*, donde inicialmente modelamos un sistema de predicción utilizando técnicas de aprendizaje supervisado.
+
+Para este proyecto, utilizamos un dataset sobre el clima en Australia que contiene información recopilada durante 10 años en diversas ciudades del país. Los datos incluyen variables como temperatura, velocidad y dirección del viento, precipitaciones, entre otros.
+
+**Dataset utilizado:** [Kaggle - Rain in Australia](https://www.kaggle.com/datasets/jsphyg/weather-dataset-rattle-package/data)
+
+## Servicios
+
+Los servicios que se implementaron fueron:
+- [Apache Airflow](https://airflow.apache.org/)
+- [MLflow](https://mlflow.org/)
+- API Rest para servir el modelo ([FastAPI](https://fastapi.tiangolo.com/))
+- [MinIO](https://min.io/)
+- Base de datos relacional [PostgreSQL](https://www.postgresql.org/)
+- [Grafana](https://grafana.com/)
+- [Prometheus](https://prometheus.io/)
+- [Streamlit](https://streamlit.io/)
+
+Por defecto, cuando se inician los multi-contenedores, se crean los siguientes buckets:
+
+- `s3://data`
+- `s3://mlflow` (usada por MLflow para guardar los artefactos).
+
+las siguientes bases de datos:
+
+- `mlflow_db` (usada por MLflow).
+- `airflow` (usada por Airflow).
+
+y los volumenes para persistir los datos:
+
+- `db_data` (usado por Postgres)
+- `minio_data` (usado por MinIO)
+- `prometheus_data` (usado por Prometheus)
+
+### Integración de servicios
+
+![Diagrama de servicios](diagrama-servicios.png)
+
+
+## Instalación
+
+1. Instalar [Docker](https://docs.docker.com/engine/install/) en tu computadora (o en el servidor que desees usar).
+
+2. Clona este repositorio.
+
+3. Si estás en Linux o MacOS, en el archivo `.env`, reemplaza `AIRFLOW_UID` por el de tu  usuario o alguno que consideres oportuno (para encontrar el UID, usa el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no podrás subir DAGs (en `airflow/dags`) o plugins, etc.
+
+4. En la carpeta raíz de este repositorio, ejecutar:
+
+```bash
+docker compose --profile all up
+```
+
+5. Podrás acceder a los diferentes servicios mediante:
+   - Apache Airflow: http://localhost:8080
+   - MLflow: http://localhost:5000
+   - MinIO: http://localhost:9001 (ventana de administración de Buckets)
+   - API: http://localhost:8800/
+   - Documentación de la API: http://localhost:8800/docs
+   - Grafana: http://localhost:3000/
+   - Stremlit: http://localhost:8501/
+
 ## Estructura principal del repositorio
 
 ```
@@ -91,60 +155,6 @@ Integrantes:
         ├── train_rain_in_australia.ipynb
 ```
 
-## Servicios
-
-Los servicios que se implementaron fueron:
-- [Apache Airflow](https://airflow.apache.org/)
-- [MLflow](https://mlflow.org/)
-- API Rest para servir el modelo ([FastAPI](https://fastapi.tiangolo.com/))
-- [MinIO](https://min.io/)
-- Base de datos relacional [PostgreSQL](https://www.postgresql.org/)
-- [Grafana](https://grafana.com/)
-- [Prometheus](https://prometheus.io/)
-- [Streamlit](https://streamlit.io/)
-
-Por defecto, cuando se inician los multi-contenedores, se crean los siguientes buckets:
-
-- `s3://data`
-- `s3://mlflow` (usada por MLflow para guardar los artefactos).
-
-las siguientes bases de datos:
-
-- `mlflow_db` (usada por MLflow).
-- `airflow` (usada por Airflow).
-
-y los volumenes para persistir los datos:
-
-- `db_data` (usado por Postgres)
-- `minio_data` (usado por MinIO)
-- `prometheus_data` (usado por Prometheus)
-
-### Integración de servicios
-
-![Diagrama de servicios](diagrama-servicios.png)
-
-## Instalación
-
-1. Instalar [Docker](https://docs.docker.com/engine/install/) en tu computadora (o en el servidor que desees usar).
-
-2. Clona este repositorio.
-
-3. Si estás en Linux o MacOS, en el archivo `.env`, reemplaza `AIRFLOW_UID` por el de tu  usuario o alguno que consideres oportuno (para encontrar el UID, usa el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no podrás subir DAGs (en `airflow/dags`) o plugins, etc.
-
-4. En la carpeta raíz de este repositorio, ejecutar:
-
-```bash
-docker compose --profile all up
-```
-
-5. Podrás acceder a los diferentes servicios mediante:
-   - Apache Airflow: http://localhost:8080
-   - MLflow: http://localhost:5000
-   - MinIO: http://localhost:9001 (ventana de administración de Buckets)
-   - API: http://localhost:8800/
-   - Documentación de la API: http://localhost:8800/docs
-   - Grafana: http://localhost:3000/
-   - Stremlit: http://localhost:8501/
 
 ## Utilización
 
@@ -199,3 +209,13 @@ Este proyecto utiliza [MLflow](https://www.mlflow.org/) para el seguimiento deta
 ...
 
 ### Streamlit
+En este proyecto, se utilizó Streamlit como la herramienta principal para el desarrollo de la interfaz de usuario. Streamlit es un framework de código abierto que permite la creación rápida de aplicaciones web interactivas y altamente personalizables en Python. La elección de Streamlit se debió a su facilidad de uso, la integración fluida con bibliotecas de ciencia de datos y su capacidad para visualizar datos en tiempo real.
+
+Ventajas de Usar Streamlit:
+1. Desarrollo Rápido: Streamlit permite convertir scripts de Python en aplicaciones web interactivas con una mínima cantidad de código adicional. Esto agiliza el proceso de desarrollo, permitiendo a los equipos enfocarse más en la lógica del negocio y en la visualización de los datos.
+
+2. Interactividad y Visualización Dinámica: Con Streamlit, es sencillo agregar controles como sliders, botones, y entradas de texto que permiten a los usuarios interactuar directamente con los datos. Además, la capacidad de actualizar gráficos y tablas en tiempo real mejora significativamente la experiencia del usuario.
+
+3. Integración Sencilla con Bibliotecas de Python: Streamlit se integra perfectamente con bibliotecas populares como Pandas, Matplotlib, Plotly, y TensorFlow, lo que facilita la visualización de datos complejos y modelos de machine learning.
+
+4. Despliegue Sencillo: Las aplicaciones creadas con Streamlit pueden ser desplegadas fácilmente en diferentes entornos, incluyendo servidores locales o servicios en la nube, lo que permite su acceso y uso por parte de diferentes equipos de trabajo o clientes.
