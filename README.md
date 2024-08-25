@@ -208,9 +208,6 @@ Este proyecto utiliza [MLflow](https://www.mlflow.org/) para el seguimiento deta
 
 - **Información de los Runs de Reentrenamiento:** Cada corrida del DAG de reentrenamiento ("challenger") se registra en MLflow, detallando los datos del modelo entrenado, las métricas obtenidas, y si este modelo superó al modelo "champion" en ese momento.
 - **Comparación de Métricas:** En caso de que el modelo "challenger" supere al "champion", se registran las métricas de ambos modelos para una comparación detallada, facilitando la toma de decisiones en la promoción de modelos a producción.
-
-### Grafana
-
 ...
 
 ### Streamlit
