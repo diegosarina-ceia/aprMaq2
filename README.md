@@ -152,11 +152,47 @@ A continuación se explica como el usuario utilizara el proyecto.
 
 ### Airflow
 
-...
+#### DAGs de Airflow para ETL y Reentrenamiento de Modelos
+
+Este repositorio contiene dos DAGs diseñados para ejecutar procesos de ETL y reentrenamiento de modelos en Apache Airflow. Previo a ejecutar el DAG de reentrenamiento, se asume que ya existe un modelo en producción cargado en MLflow. Dicho modelo pudo haber sido generado, por ejemplo, a través del notebook `aprMaq2/servicio-ml/notebooks/train_rain_in_australia.ipynb`.
+
+##### Descripción de los DAGs
+
+###### 1. `etl_process_rain_australia`
+
+- **Script:** `etl_process.py`
+- **Descripción:** Este DAG maneja el proceso de carga de datos, incluyendo las transformaciones, la división del dataset en subconjuntos de entrenamiento y validación, y la normalización de los datos de entrada.
+- **Programación:** Se ejecuta el primer día de cada mes a las 00:00 horas.
+
+###### 2. `train_model_rain_australia`
+
+- **Script:** `retrain_model.py`
+- **Descripción:** Este DAG realiza el reentrenamiento del modelo basado en un modelo existente cargado en MLflow. Si las métricas del nuevo modelo superan a las del modelo existente, el modelo se actualiza, se etiqueta como "champion" y se desmarca el modelo anterior.
+- **Programación:** Se ejecuta el primer día de cada mes a las 01:00 horas, una hora después del DAG `etl_process_rain_australia`.
+
+##### Programación de Ejecución
+
+El DAG `etl_process_rain_australia` está programado para ejecutarse a las 00:00 horas del primer día de cada mes. El DAG `train_model_rain_australia` está programado para ejecutarse una hora más tarde, a las 01:00 horas. Según las pruebas realizadas, este intervalo es suficiente para completar el proceso ETL antes de que comience el reentrenamiento.
 
 ### MLflow
 
-...
+#### Uso de MLflow en el Proyecto
+
+Este proyecto utiliza [MLflow](https://www.mlflow.org/) para el seguimiento detallado de los procesos de ETL, el tuneo de hiperparámetros y el reentrenamiento de modelos. A continuación, se describen los principales aspectos registrados.
+
+##### Registro de Tuneo de Hiperparámetros
+
+- **Runs y Runs Anidados:** Cada proceso de tuneo de hiperparámetros se registra en MLflow, creando un run principal para el proceso general y runs anidados para cada trial realizado. En cada run anidado, se registran los parámetros específicos utilizados y las métricas obtenidas.
+- **Modelos y Artefactos:** Los modelos generados durante el tuneo, junto con sus artefactos, como gráficos de correlación, se almacenan y están disponibles para su revisión.
+
+##### Registro de Procesos del DAG de ETL
+
+- **Datasets Originales y Transformados:** Durante la ejecución del DAG de ETL, se guarda en MLflow información detallada de los datasets originales y transformados. Esto incluye la cantidad de observaciones en los conjuntos de entrenamiento y prueba, así como los parámetros de escalamiento utilizados (media y desviación estándar).
+
+##### Registro de Procesos de Reentrenamiento del Modelo
+
+- **Información de los Runs de Reentrenamiento:** Cada corrida del DAG de reentrenamiento ("challenger") se registra en MLflow, detallando los datos del modelo entrenado, las métricas obtenidas, y si este modelo superó al modelo "champion" en ese momento.
+- **Comparación de Métricas:** En caso de que el modelo "challenger" supere al "champion", se registran las métricas de ambos modelos para una comparación detallada, facilitando la toma de decisiones en la promoción de modelos a producción.
 
 ### Grafana
 
