@@ -38,8 +38,59 @@ def load_model(model_name: str, alias: str):
             model_ml = pickle.load(file_ml)
         version_model_ml = 0
 
-    return model_ml, version_model_ml
+    try:
+        # Load information of the ETL pipeline from S3
+        s3 = boto3.client('s3')
 
+        s3.head_object(Bucket='data', Key='data_info/data.json')
+        result_s3 = s3.get_object(Bucket='data', Key='data_info/data.json')
+        text_s3 = result_s3["Body"].read().decode()
+        data_dictionary = json.loads(text_s3)
+
+        data_dictionary["standard_scaler_mean"] = np.array(data_dictionary["standard_scaler_mean"])
+        data_dictionary["standard_scaler_std"] = np.array(data_dictionary["standard_scaler_std"])
+    except:
+        # If data dictionary is not found in S3, load it from local file
+        file_s3 = open('/app/files/data.json', 'r')
+        data_dictionary = json.load(file_s3)
+        file_s3.close()
+
+    return model_ml, version_model_ml, data_dictionary
+
+
+def transform_single_example(raw_example, wind_dir_mapping):
+    """
+    Transforma un ejemplo único de datos crudos de clima y devuelve un diccionario con los campos transformados.
+    
+    Parameters:
+    raw_example (dict): Diccionario con los datos crudos de un solo ejemplo.
+    wind_dir_mapping (dict): Diccionario que mapea direcciones del viento a ángulos.
+
+    Returns:
+    dict: Diccionario con los datos transformados.
+    """
+    
+    # Convertir el ejemplo en un DataFrame
+    weather_df = pd.DataFrame([raw_example])
+
+    # Verificar si las tres claves están presentes
+    wind_keys = ['WindGustDir', 'WindDir9am', 'WindDir3pm']
+    if all(key in weather_df.columns for key in wind_keys):
+        # Codificación de la dirección del viento en componentes seno y coseno
+        def encode_wind_dir(df, col, mapping):
+            angles = df[col].map(mapping)
+            angles_rad = np.deg2rad(angles)
+            df[f'{col}_sin'] = np.sin(angles_rad)
+            df[f'{col}_cos'] = np.cos(angles_rad)
+            df.drop(columns=col, inplace=True)
+
+        encode_wind_dir(weather_df, 'WindGustDir', wind_dir_mapping)
+        encode_wind_dir(weather_df, 'WindDir9am', wind_dir_mapping)
+        encode_wind_dir(weather_df, 'WindDir3pm', wind_dir_mapping)
+
+    # Convertir el DataFrame transformado de nuevo a un diccionario
+    transformed_data = weather_df.iloc[0].to_dict()
+    return transformed_data
 
 # Clase de entrada basada en los 29 features del dataset con validaciones y descripciones
 # Los features con alta correlacion se configuraron como opcionales
@@ -188,7 +239,19 @@ class ModelOutput(BaseModel):
 
 
 # Cargar el modelo antes de iniciar
-model, version_model = load_model("rain_australia_model_prod", "champion")
+model, version_model, data_dict = load_model("rain_australia_model_prod", "champion")
+
+direccion_to_angulo = {
+    'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5, 'E': 90, 'ESE': 112.5,
+    'SE': 135, 'SSE': 157.5, 'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+    'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5
+}
+
+def load_json_from_s3(bucket_name, key):
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=bucket_name, Key=key)
+    json_data = json.loads(response['Body'].read().decode('utf-8'))
+    return json_data
 
 app = FastAPI()
 
@@ -204,6 +267,11 @@ def predict(
     background_tasks: BackgroundTasks
 ):
     features_dict = features.dict()
+
+    transformed_data_dict = transform_single_example(features_dict, direccion_to_angulo)
+
+    print(f"transformed_data_dict: {transformed_data_dict}")
+
     print(f"features: {features_dict}")
     features_list = [features_dict[key] for key in features_dict.keys()]
 
@@ -211,8 +279,13 @@ def predict(
     features_df = pd.DataFrame([features_list], columns=features_dict.keys())
     print(f"DataFrame columns: {features_df.columns}")
 
+    # Se escalan los datos utilizando standard scaler
+    features_df = (features_df-data_dict["standard_scaler_mean"])/data_dict["standard_scaler_std"]
+
     # Realizar la predicción
     prediction = model.predict(features_df)
+
+    print(f'prediction: {prediction}')
 
     # Convertir el resultado a cadena legible
     str_pred = "No rain tomorrow" if prediction[0] == 0 else "Rain expected tomorrow"
