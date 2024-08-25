@@ -166,7 +166,7 @@ Este repositorio contiene dos DAGs diseñados para ejecutar procesos de ETL y re
 
 ###### 2. `train_model_rain_australia`
 
-- **Script:** `etl_process.py`
+- **Script:** `retrain_model.py`
 - **Descripción:** Este DAG realiza el reentrenamiento del modelo basado en un modelo existente cargado en MLflow. Si las métricas del nuevo modelo superan a las del modelo existente, el modelo se actualiza, se etiqueta como "champion" y se desmarca el modelo anterior.
 - **Programación:** Se ejecuta el primer día de cada mes a las 01:00 horas, una hora después del DAG `etl_process_rain_australia`.
 
