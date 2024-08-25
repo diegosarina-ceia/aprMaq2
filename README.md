@@ -71,6 +71,11 @@ docker compose --profile all up
    - Grafana: http://localhost:3000/
    - Stremlit: http://localhost:8501/
 
+Recomendamos al usuario ingresar al servicio de [streamlit](http://localhost:8501/) para una experiencia mas agradable. Se adjunta un ejemplo:
+
+![Streamlit inicial](streamlit.png)
+
+![Streamlit prediccion](streamlit-prediccion.png)
 ## Estructura principal del repositorio
 
 ```
