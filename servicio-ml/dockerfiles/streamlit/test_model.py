@@ -50,8 +50,8 @@ def show():
         wind_speed3pm = st.slider('WindSpeed3pm', min_value=0.0, max_value=100.0, value=24.0, format="%.1f")
         humidity9am = st.slider('Humidity9am', min_value=0.0, max_value=100.0, value=82.0, format="%.1f")
         humidity3pm = st.slider('Humidity3pm', min_value=0.0, max_value=100.0, value=55.0, format="%.1f")
-        cloud9am = st.slider('Cloud9am', min_value=0.0, max_value=10.0, value=4.0, format="%.1f")
-        cloud3pm = st.slider('Cloud3pm', min_value=0.0, max_value=10.0, value=3.0, format="%.1f")
+        cloud9am = st.slider('Cloud9am', min_value=0.0, max_value=9.0, value=4.0, format="%.1f")
+        cloud3pm = st.slider('Cloud3pm', min_value=0.0, max_value=9.0, value=3.0, format="%.1f")
         rain_today = st.slider('RainToday', min_value=0, max_value=1, value=0, format="%d")
         
         # Variables opcionales
